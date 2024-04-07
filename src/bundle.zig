@@ -20,11 +20,11 @@ pub fn isBundle(buf: []const u8) bool {
 /// Utility structure to encode bundle elements
 pub const BundleElement = struct {
     content: union(enum) {
-        bundle: *const Bundle,
-        message: *const Message,
+        bundle: *Bundle,
+        message: *Message,
     },
 
-    pub fn initMessage(msg: *const Message) BundleElement {
+    pub fn initMessage(msg: *Message) BundleElement {
         return .{
             .content = .{ .message = msg },
         };
@@ -104,7 +104,7 @@ test "bundle encode/decode" {
     const testing = std.testing;
 
     var buf: [128]u8 = undefined;
-    const msg = Message.init("/foo/bar", "ifT", &[_]Value{ .{ .i = 1234 }, .{ .f = 1.234 } }); // 28 bytes
+    var msg = Message.init("/foo/bar", "ifT", &[_]Value{ .{ .i = 1234 }, .{ .f = 1.234 } }); // 28 bytes
     var element = BundleElement.initMessage(&msg);
     var bundle = Bundle.init(0, &element);
 
