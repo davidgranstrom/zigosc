@@ -46,10 +46,6 @@ pub const Value = union(Type) {
     N: void,
     /// Infinitum. No bytes are allocated in the argument data.
     I: void,
-    // /// Indicates the beginning of an array. The tags following are for data in the Array until a close brace tag is reached.
-    // @"[": void,
-    // /// Indicates the end of an array.
-    // @"]": void,
 
     pub fn encode(self: Value, buf: []u8) ValueError!usize {
         switch (self) {
