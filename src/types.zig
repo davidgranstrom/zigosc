@@ -10,6 +10,11 @@ fn alignedBlobLength(n: usize) usize {
     return 4 * (@divFloor(n + 3, 4));
 }
 
+/// Answers if the encoded data is an OSC bundle
+pub fn isBundle(buf: []const u8) bool {
+    return std.mem.eql(u8, "#bundle\x00", buf[0..8]);
+}
+
 /// Supported OSC types
 pub const Type = enum { i, f, s, b, h, t, d, S, c, r, m, T, F, N, I };
 
@@ -119,6 +124,17 @@ pub const Value = union(Type) {
             },
         }
     }
+
+    pub fn getSize(self: Value) usize {
+        return switch (self) {
+            .s => |v| alignedStringLength(v.len),
+            .S => |v| alignedStringLength(v.len),
+            .b => |v| alignedBlobLength(v.len),
+            .i, .f, .c, .r, .m => 4,
+            .h, .t, .d => 8,
+            .T, .F, .N, .I => 0,
+        };
+    }
 };
 
 pub const Message = struct {
@@ -141,14 +157,7 @@ pub const Message = struct {
         const pad: usize = if (self.typetag[0] != ',') 1 else 0;
         size += alignedStringLength(pad + self.typetag.len);
         for (self.values) |value| {
-            size += switch (value) {
-                .s => alignedStringLength(value.s.len),
-                .S => alignedStringLength(value.S.len),
-                .b => alignedBlobLength(value.b.len),
-                .i, .f, .c, .r, .m => 4,
-                .h, .t, .d => 8,
-                .T, .F, .N, .I => 0,
-            };
+            size += value.getSize();
         }
         return size;
     }
@@ -184,15 +193,19 @@ pub const Message = struct {
         if (typetag) |tag| {
             tag.* = tmp.s[1..];
         }
-        if (values) |vals| {
-            for (tmp.s[1..], 0..) |c, i| {
-                if (c == 'T' or c == 'F' or c == 'N' or c == 'I') continue;
-                const tag_name = [_]u8{c};
-                if (std.meta.stringToEnum(Type, &tag_name)) |T| {
-                    offset += try Value.decode(T, buf[offset..], &vals[i]);
-                } else {
-                    return error.InvalidType;
+        for (tmp.s[1..], 0..) |c, i| {
+            if (c == 'T' or c == 'F' or c == 'N' or c == 'I') continue;
+            const tag_name = [_]u8{c};
+            var tmp_val: Value = undefined;
+            if (std.meta.stringToEnum(Type, &tag_name)) |T| {
+                offset += try Value.decode(T, buf[offset..], &tmp_val);
+                if (values) |vals| {
+                    if (i >= vals.len)
+                        return error.NotEnoughValues;
+                    vals[i] = tmp_val;
                 }
+            } else {
+                return error.InvalidType;
             }
         }
         return offset;
@@ -272,6 +285,24 @@ pub const Bundle = struct {
         offset += try self.element.encode(buf[offset..]);
         return offset;
     }
+
+    pub fn decode(buf: []const u8, timetag: ?*u64, element_size: ?*usize) !usize {
+        var offset: usize = 0;
+        if (!isBundle(buf))
+            return error.InvalidBundle;
+        offset += 8;
+        var tmp = Value{ .t = 0 };
+        offset += try Value.decode(Type.t, buf[offset..], &tmp);
+        if (timetag) |tt| {
+            tt.* = tmp.t;
+        }
+        tmp = Value{ .i = 0 };
+        offset += try Value.decode(Type.i, buf[offset..], &tmp);
+        if (element_size) |ofs| {
+            ofs.* = @intCast(tmp.i);
+        }
+        return offset;
+    }
 };
 
 test "bundle" {
@@ -290,6 +321,20 @@ test "bundle" {
     num_encoded_bytes = try bundle2.encode(&buf);
     try testing.expectEqual(@as(usize, 68), first_bundle_size + 20);
     try testing.expectEqual(@as(usize, 68), bundle2.getSize());
+
+    try testing.expect(isBundle(&buf));
+
+    var timetag: u64 = undefined;
+    var element_size: usize = undefined;
+    var offset = try Bundle.decode(&buf, &timetag, &element_size);
+    try testing.expectEqual(@as(usize, 20), offset);
+    try testing.expect(isBundle(buf[offset..]));
+    offset += try Bundle.decode(buf[offset..], &timetag, &element_size);
+    try testing.expectEqual(@as(usize, 40), offset);
+    try testing.expect(!isBundle(buf[offset..]));
+    offset += try Message.decode(buf[offset..], null, null, null);
+    try testing.expectEqual(@as(usize, 68), offset);
+    try testing.expectEqual(bundle2.getSize(), offset);
 }
 
 test "message" {
