@@ -135,8 +135,26 @@ pub const Message = struct {
         };
     }
 
+    pub fn getSize(self: *const Message) usize {
+        var size: usize = 0;
+        size += alignedStringLength(self.address.len);
+        const pad: usize = if (self.typetag[0] != ',') 1 else 0;
+        size += alignedStringLength(pad + self.typetag.len);
+        for (self.values) |value| {
+            size += switch (value) {
+                .s => alignedStringLength(value.s.len),
+                .S => alignedStringLength(value.S.len),
+                .b => alignedBlobLength(value.b.len),
+                .i, .f, .c, .r, .m => 4,
+                .h, .t, .d => 8,
+                .T, .F, .N, .I => 0,
+            };
+        }
+        return size;
+    }
+
     /// Encode the message to OSC bytes
-    pub fn encode(self: *Message, buf: []u8) !usize {
+    pub fn encode(self: *const Message, buf: []u8) !usize {
         const address = Value{ .s = self.address };
         var offset = try address.encode(buf[0..]);
         const typetag = Value{ .s = self.typetag };
@@ -181,13 +199,107 @@ pub const Message = struct {
     }
 };
 
+const OSCError = error{
+    Encode,
+    OutOfMemory,
+};
+
+pub const BundleElement = struct {
+    size: Value,
+    content: union(enum) {
+        bundle: *const Bundle,
+        message: *const Message,
+    },
+
+    pub fn initMessage(msg: *const Message) BundleElement {
+        return .{
+            .content = .{ .message = msg },
+            .size = Value{ .i = 0 },
+        };
+    }
+
+    pub fn initBundle(bundle: *Bundle) BundleElement {
+        return .{
+            .content = .{ .bundle = bundle },
+            .size = Value{ .i = 0 },
+        };
+    }
+
+    pub fn getSize(self: *BundleElement) usize {
+        return switch (self.content) {
+            .message => |msg| msg.getSize(),
+            .bundle => |bundle| bundle.getSize(),
+        };
+    }
+
+    pub fn encode(self: *BundleElement, buf: []u8) OSCError!usize {
+        const size = switch (self.content) {
+            .message => |msg| try msg.encode(buf),
+            .bundle => |bundle| try bundle.encode(buf),
+        };
+        self.size.i = @intCast(size);
+        return size;
+    }
+
+    pub fn decode(buf: []const u8) !usize {
+        _ = buf;
+    }
+};
+
+pub const Bundle = struct {
+    timetag: Value,
+    element: *BundleElement,
+
+    pub fn init(timetag: u64, element: *BundleElement) Bundle {
+        return .{
+            .timetag = Value{ .t = timetag },
+            .element = element,
+        };
+    }
+
+    pub fn getSize(self: *const Bundle) usize {
+        var size: usize = 20; // #bundle (8) + timetag (8) + size (4)
+        size += self.element.getSize();
+        return size;
+    }
+
+    pub fn encode(self: *const Bundle, buf: []u8) !usize {
+        const header = Value{ .s = "#bundle" };
+        var offset = try header.encode(buf);
+        offset += try self.timetag.encode(buf[offset..]);
+        const element_size = Value{ .i = @intCast(self.element.getSize()) };
+        offset += try element_size.encode(buf[offset..]);
+        offset += try self.element.encode(buf[offset..]);
+        return offset;
+    }
+};
+
+test "bundle" {
+    var buf: [128]u8 = undefined;
+    const msg = Message.init("/foo/bar", "ifT", &[_]Value{ .{ .i = 1234 }, .{ .f = 1.234 } }); // 28 bytes
+    var element = BundleElement.initMessage(&msg);
+    var bundle = Bundle.init(0, &element);
+
+    var num_encoded_bytes = try bundle.encode(&buf);
+    try testing.expectEqual(@as(usize, 0), num_encoded_bytes % 4);
+    try testing.expectEqual(msg.getSize() + 20, num_encoded_bytes); // #bundle (8) + timetag (8) + size (4)
+    const first_bundle_size = num_encoded_bytes;
+
+    var nested_bundle = BundleElement.initBundle(&bundle);
+    var bundle2 = Bundle.init(0, &nested_bundle);
+    num_encoded_bytes = try bundle2.encode(&buf);
+    try testing.expectEqual(@as(usize, 68), first_bundle_size + 20);
+    try testing.expectEqual(@as(usize, 68), bundle2.getSize());
+}
+
 test "message" {
     const values = [_]Value{ .{ .i = 1234 }, .{ .f = 1.234 } };
-    var msg = Message.init("/foo/bar", "ifT", &values);
+    var msg = Message.init("/foo/bar", "ifT", &values); // 12 + 8 + 4 + 4
     var buf: [64]u8 = undefined;
     const num_encoded_bytes = try msg.encode(&buf);
 
     try testing.expectEqual(@as(usize, 0), num_encoded_bytes % 4);
+    try testing.expectEqual(num_encoded_bytes, msg.getSize());
 
     var address: []const u8 = undefined;
     var typetag: []const u8 = undefined;
