@@ -217,8 +217,8 @@ const OSCError = error{
     OutOfMemory,
 };
 
+/// Utility structure to encode bundle elements
 pub const BundleElement = struct {
-    size: Value,
     content: union(enum) {
         bundle: *const Bundle,
         message: *const Message,
@@ -227,14 +227,12 @@ pub const BundleElement = struct {
     pub fn initMessage(msg: *const Message) BundleElement {
         return .{
             .content = .{ .message = msg },
-            .size = Value{ .i = 0 },
         };
     }
 
     pub fn initBundle(bundle: *Bundle) BundleElement {
         return .{
             .content = .{ .bundle = bundle },
-            .size = Value{ .i = 0 },
         };
     }
 
@@ -250,12 +248,7 @@ pub const BundleElement = struct {
             .message => |msg| try msg.encode(buf),
             .bundle => |bundle| try bundle.encode(buf),
         };
-        self.size.i = @intCast(size);
         return size;
-    }
-
-    pub fn decode(buf: []const u8) !usize {
-        _ = buf;
     }
 };
 
