@@ -87,7 +87,7 @@ pub const Message = struct {
     }
 };
 
-test "message" {
+test "message encode/decode" {
     const testing = std.testing;
 
     const values = [_]Value{ .{ .i = 1234 }, .{ .f = 1.234 } };
