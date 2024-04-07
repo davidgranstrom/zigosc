@@ -1,5 +1,4 @@
 const std = @import("std");
-const testing = std.testing;
 const Message = @import("message.zig").Message;
 const Type = @import("value.zig").Type;
 const Value = @import("value.zig").Value;
@@ -102,6 +101,8 @@ pub const Bundle = struct {
 };
 
 test "bundle encode/decode" {
+    const testing = std.testing;
+
     var buf: [128]u8 = undefined;
     const msg = Message.init("/foo/bar", "ifT", &[_]Value{ .{ .i = 1234 }, .{ .f = 1.234 } }); // 28 bytes
     var element = BundleElement.initMessage(&msg);

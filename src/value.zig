@@ -1,5 +1,4 @@
 const std = @import("std");
-const testing = std.testing;
 
 pub const ValueError = error{
     OutOfMemory,
@@ -138,6 +137,8 @@ pub const Value = union(Type) {
 };
 
 test "value encode/decode" {
+    const testing = std.testing;
+
     var buf: [32]u8 = undefined;
     // int
     var value = Value{ .i = 1234 };

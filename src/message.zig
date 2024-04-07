@@ -1,5 +1,4 @@
 const std = @import("std");
-const testing = std.testing;
 const Type = @import("value.zig").Type;
 const Value = @import("value.zig").Value;
 const ValueError = @import("value.zig").ValueError;
@@ -89,6 +88,8 @@ pub const Message = struct {
 };
 
 test "message" {
+    const testing = std.testing;
+
     const values = [_]Value{ .{ .i = 1234 }, .{ .f = 1.234 } };
     var msg = Message.init("/foo/bar", "ifT", &values); // 12 + 8 + 4 + 4
     var buf: [64]u8 = undefined;
