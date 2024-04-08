@@ -15,10 +15,10 @@ const Error = ValueError || MessageError;
 pub const Message = struct {
     address: []const u8,
     typetag: []const u8,
-    values: []const Value,
+    values: ?[]const Value,
 
     /// Initialize a new message.
-    pub fn init(address: []const u8, typetag: []const u8, values: []const Value) Message {
+    pub fn init(address: []const u8, typetag: []const u8, values: ?[]const Value) Message {
         return .{
             .address = address,
             .typetag = typetag,
@@ -31,8 +31,10 @@ pub const Message = struct {
         size += alignedStringLength(self.address.len);
         const pad: usize = if (self.typetag[0] != ',') 1 else 0;
         size += alignedStringLength(pad + self.typetag.len);
-        for (self.values) |value| {
-            size += value.getSize();
+        if (self.values) |values| {
+            for (values) |value| {
+                size += value.getSize();
+            }
         }
         return size;
     }
@@ -49,8 +51,10 @@ pub const Message = struct {
         } else {
             offset += try typetag.encode(buf[offset..]);
         }
-        for (self.values) |value| {
-            offset += try value.encode(buf[offset..]);
+        if (self.values) |values| {
+            for (values) |value| {
+                offset += try value.encode(buf[offset..]);
+            }
         }
         return offset;
     }
