@@ -44,8 +44,8 @@ pub const Message = struct {
         const typetag = Value{ .s = self.typetag };
         if (typetag.s[0] != ',') {
             buf[offset] = ',';
-            const tmp_offset = try typetag.encode(buf[1 + offset ..]);
-            offset += alignedStringLength(tmp_offset + 1);
+            _ = try typetag.encode(buf[1 + offset ..]);
+            offset += alignedStringLength(1 + typetag.s.len);
         } else {
             offset += try typetag.encode(buf[offset..]);
         }
