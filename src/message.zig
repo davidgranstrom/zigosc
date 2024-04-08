@@ -44,7 +44,10 @@ pub const Message = struct {
         const address = Value{ .s = self.address };
         var offset = try address.encode(buf[0..]);
         const typetag = Value{ .s = self.typetag };
-        if (typetag.s[0] != ',') {
+        if (typetag.s.len == 0) {
+            @memcpy(buf[offset .. offset + 4], &[_]u8{ ',', 0, 0, 0 });
+            offset += 4;
+        } else if (typetag.s[0] != ',') {
             buf[offset] = ',';
             _ = try typetag.encode(buf[1 + offset ..]);
             offset += alignedStringLength(1 + typetag.s.len);
@@ -102,7 +105,7 @@ test "message encode/decode" {
     const values = [_]Value{ .{ .i = 1234 }, .{ .f = 1.234 } };
     var msg = Message.init("/foo/bar", "ifT", &values); // 12 + 8 + 4 + 4
     var buf: [64]u8 = undefined;
-    const num_encoded_bytes = try msg.encode(&buf);
+    var num_encoded_bytes = try msg.encode(&buf);
 
     try testing.expectEqual(@as(usize, 0), num_encoded_bytes % 4);
     try testing.expectEqual(num_encoded_bytes, msg.getSize());
@@ -119,4 +122,8 @@ test "message encode/decode" {
     try testing.expectEqual(@as(usize, 2), num_decoded_values);
     try testing.expectEqual(@as(i32, 1234), out_values[0].i);
     try testing.expectEqual(@as(f32, 1.234), out_values[1].f);
+
+    msg = Message.init("/ab", "", null);
+    num_encoded_bytes = try msg.encode(&buf);
+    try testing.expectEqual(@as(usize, 8), num_encoded_bytes);
 }
