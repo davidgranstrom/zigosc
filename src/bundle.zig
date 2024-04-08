@@ -129,7 +129,7 @@ test "bundle encode/decode" {
     offset += try Bundle.decode(buf[offset..], &timetag, &element_size);
     try testing.expectEqual(@as(usize, 40), offset);
     try testing.expect(!isBundle(buf[offset..]));
-    offset += try Message.decode(buf[offset..], null, null, null);
+    offset += try Message.decode(buf[offset..], null, null, null, null);
     try testing.expectEqual(@as(usize, 68), offset);
     try testing.expectEqual(bundle2.getSize(), offset);
 }
