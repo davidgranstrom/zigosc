@@ -3,6 +3,7 @@ const std = @import("std");
 pub const ValueError = error{
     OutOfMemory,
     NullTerminator,
+    NoSpaceLeft,
 };
 
 pub fn alignedStringLength(n: usize) usize {
@@ -47,36 +48,33 @@ pub const Value = union(Type) {
     /// Infinitum. No bytes are allocated in the argument data.
     I: void,
 
-    pub fn encode(self: Value, buf: []u8) ValueError!usize {
+    pub fn encode(self: Value, writer: anytype) !usize {
         switch (self) {
             .s, .S => |str| {
                 const aligned_len = alignedStringLength(str.len);
-                if (buf.len < aligned_len)
-                    return ValueError.OutOfMemory;
-                @memcpy(buf[0..str.len], str);
-                @memset(buf[str.len..aligned_len], 0);
+                _ = try writer.write(str);
+                try writer.writeByteNTimes(0, aligned_len - str.len);
                 return aligned_len;
             },
             .b => |blob| {
                 const len = alignedBlobLength(blob.len);
                 const blob_len = Value{ .i = @intCast(blob.len) };
-                const offset = try blob_len.encode(buf);
-                const start = offset + blob.len;
-                const end = offset + len;
-                @memcpy(buf[offset .. offset + blob.len], blob);
-                @memset(buf[start..end], 0);
-                return offset + len;
+                var offset = try blob_len.encode(writer);
+                offset += try writer.write(blob);
+                const padding = len - blob.len;
+                try writer.writeByteNTimes(0, padding);
+                offset += padding;
+                return offset;
             },
             .T, .F, .N, .I => return 0,
             // Scalar values
             inline else => |v| {
+                var buf: [8]u8 = undefined;
                 const T = @TypeOf(v);
                 const size = @sizeOf(T);
                 const length = if (size == 4) u32 else u64;
-                if (buf.len < size)
-                    return ValueError.OutOfMemory;
                 std.mem.writeInt(length, buf[0..size], @bitCast(v), .big);
-                return size;
+                return try writer.write(buf[0..size]);
             },
         }
     }
@@ -136,49 +134,62 @@ test "value encode/decode" {
     const testing = std.testing;
 
     var buf: [32]u8 = undefined;
+    var fbs = std.io.fixedBufferStream(&buf);
+    const writer = fbs.writer();
+    // const reader = fbs.reader();
     // int
     var value = Value{ .i = 1234 };
-    var ret = try value.encode(&buf);
+    var ret = try value.encode(writer);
     try testing.expectEqual(@as(usize, 4), ret);
     ret = try Value.decode(Type.i, &buf, &value);
     try testing.expectEqual(@as(usize, 4), ret);
     try testing.expectEqual(@as(i32, 1234), value.i);
 
+    fbs.reset();
+
     // float
     value = Value{ .f = 1.234 };
-    ret = try value.encode(&buf);
+    ret = try value.encode(writer);
     try testing.expectEqual(@as(usize, 4), ret);
     ret = try Value.decode(Type.f, &buf, &value);
     try testing.expectEqual(@as(usize, 4), ret);
     try testing.expectEqual(@as(f32, 1.234), value.f);
 
+    fbs.reset();
+
     // string
     value = Value{ .s = "hello world" };
-    ret = try value.encode(&buf);
+    ret = try value.encode(writer);
     try testing.expectEqual(@as(usize, alignedStringLength(value.s.len)), ret);
     ret = try Value.decode(Type.s, &buf, &value);
     try testing.expectEqual(@as(usize, alignedStringLength(value.s.len)), ret);
     try testing.expectEqualSlices(u8, "hello world", value.s);
 
+    fbs.reset();
+
     // blob
     value = Value{ .b = &[_]u8{ 0x12, 0x23, 0x00, 0x45 } };
-    ret = try value.encode(&buf);
+    ret = try value.encode(writer);
     try testing.expectEqual(@as(usize, 4 + alignedBlobLength(value.b.len)), ret);
     ret = try Value.decode(Type.b, &buf, &value);
     try testing.expectEqual(@as(usize, 4 + alignedBlobLength(value.b.len)), ret);
     try testing.expectEqualSlices(u8, &[_]u8{ 0x12, 0x23, 0x00, 0x45 }, value.b);
 
+    fbs.reset();
+
     // int64
     value = Value{ .h = std.math.maxInt(i64) };
-    ret = try value.encode(&buf);
+    ret = try value.encode(writer);
     try testing.expectEqual(@as(usize, 8), ret);
     ret = try Value.decode(Type.h, &buf, &value);
     try testing.expectEqual(@as(usize, 8), ret);
     try testing.expectEqual(@as(i64, std.math.maxInt(i64)), value.h);
 
+    fbs.reset();
+
     // timetag
     value = Value{ .t = std.math.maxInt(u64) };
-    ret = try value.encode(&buf);
+    ret = try value.encode(writer);
     try testing.expectEqual(@as(usize, 8), ret);
     ret = try Value.decode(Type.t, &buf, &value);
     try testing.expectEqual(@as(usize, 8), ret);

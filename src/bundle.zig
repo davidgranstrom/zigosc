@@ -43,10 +43,10 @@ pub const BundleElement = struct {
         };
     }
 
-    pub fn encode(self: *BundleElement, buf: []u8) Error!usize {
+    pub fn encode(self: *BundleElement, writer: anytype) Error!usize {
         const size = switch (self.content) {
-            .message => |msg| try msg.encode(buf),
-            .bundle => |bundle| try bundle.encode(buf),
+            .message => |msg| try msg.encode(writer),
+            .bundle => |bundle| try bundle.encode(writer),
         };
         return size;
     }
@@ -71,13 +71,13 @@ pub const Bundle = struct {
         return size;
     }
 
-    pub fn encode(self: *const Bundle, buf: []u8) Error!usize {
+    pub fn encode(self: *const Bundle, writer: anytype) !usize {
         const header = Value{ .s = "#bundle" };
-        var offset = try header.encode(buf);
-        offset += try self.timetag.encode(buf[offset..]);
+        var offset = try header.encode(writer);
+        offset += try self.timetag.encode(writer);
         const element_size = Value{ .i = @intCast(self.element.getSize()) };
-        offset += try element_size.encode(buf[offset..]);
-        offset += try self.element.encode(buf[offset..]);
+        offset += try element_size.encode(writer);
+        offset += try self.element.encode(writer);
         return offset;
     }
 
@@ -104,18 +104,23 @@ test "bundle encode/decode" {
     const testing = std.testing;
 
     var buf: [128]u8 = undefined;
+    var fbs = std.io.fixedBufferStream(&buf);
+    const writer = fbs.writer();
+
     var msg = Message.init("/foo/bar", "ifT", &[_]Value{ .{ .i = 1234 }, .{ .f = 1.234 } }); // 28 bytes
     var element = BundleElement.initMessage(&msg);
     var bundle = Bundle.init(0, &element);
 
-    var num_encoded_bytes = try bundle.encode(&buf);
+    var num_encoded_bytes = try bundle.encode(writer);
     try testing.expectEqual(@as(usize, 0), num_encoded_bytes % 4);
     try testing.expectEqual(msg.getSize() + 20, num_encoded_bytes); // #bundle (8) + timetag (8) + size (4)
     const first_bundle_size = num_encoded_bytes;
 
+    fbs.reset();
+
     var nested_bundle = BundleElement.initBundle(&bundle);
     var bundle2 = Bundle.init(0, &nested_bundle);
-    num_encoded_bytes = try bundle2.encode(&buf);
+    num_encoded_bytes = try bundle2.encode(writer);
     try testing.expectEqual(@as(usize, 68), first_bundle_size + 20);
     try testing.expectEqual(@as(usize, 68), bundle2.getSize());
 

@@ -40,23 +40,25 @@ pub const Message = struct {
     }
 
     /// Encode the message to OSC bytes
-    pub fn encode(self: *const Message, buf: []u8) Error!usize {
+    pub fn encode(self: *const Message, writer: anytype) !usize {
         const address = Value{ .s = self.address };
-        var offset = try address.encode(buf[0..]);
         const typetag = Value{ .s = self.typetag };
+        var offset = try address.encode(writer);
         if (typetag.s.len == 0) {
-            @memcpy(buf[offset .. offset + 4], &[_]u8{ ',', 0, 0, 0 });
-            offset += 4;
+            offset += try writer.write(&[_]u8{ ',', 0, 0, 0 });
         } else if (typetag.s[0] != ',') {
-            buf[offset] = ',';
-            _ = try typetag.encode(buf[1 + offset ..]);
-            offset += alignedStringLength(1 + typetag.s.len);
+            _ = try writer.writeByte(',');
+            var tmp_offset: usize = 1;
+            tmp_offset += try typetag.encode(writer);
+            const padding = alignedStringLength(1 + typetag.s.len) - tmp_offset;
+            try writer.writeByteNTimes(0, padding);
+            offset += tmp_offset + padding;
         } else {
-            offset += try typetag.encode(buf[offset..]);
+            offset += try typetag.encode(writer);
         }
         if (self.values) |values| {
             for (values) |value| {
-                offset += try value.encode(buf[offset..]);
+                offset += try value.encode(writer);
             }
         }
         return offset;
@@ -102,10 +104,14 @@ pub const Message = struct {
 test "message encode/decode" {
     const testing = std.testing;
 
+    var buf: [64]u8 = undefined;
+    var fbs = std.io.fixedBufferStream(&buf);
+    const writer = fbs.writer();
+
     const values = [_]Value{ .{ .i = 1234 }, .{ .f = 1.234 } };
     var msg = Message.init("/foo/bar", "ifT", &values); // 12 + 8 + 4 + 4
-    var buf: [64]u8 = undefined;
-    var num_encoded_bytes = try msg.encode(&buf);
+    var num_encoded_bytes = try msg.encode(writer);
+    std.debug.print("{any}\n", .{buf});
 
     try testing.expectEqual(@as(usize, 0), num_encoded_bytes % 4);
     try testing.expectEqual(num_encoded_bytes, msg.getSize());
@@ -123,7 +129,8 @@ test "message encode/decode" {
     try testing.expectEqual(@as(i32, 1234), out_values[0].i);
     try testing.expectEqual(@as(f32, 1.234), out_values[1].f);
 
+    fbs.reset();
     msg = Message.init("/ab", "", null);
-    num_encoded_bytes = try msg.encode(&buf);
+    num_encoded_bytes = try msg.encode(writer);
     try testing.expectEqual(@as(usize, 8), num_encoded_bytes);
 }
