@@ -18,16 +18,23 @@ const Value = zigosc.Value;
 
 pub fn main() !void {
     var buf: [128]u8 = undefined;
+
     // Encode message
-    var msg = Message.init("/x", "fff", &[_]Value{ .{ .f = 0.25 }, .{ .f = 0.5 }, .{ .f = 1.0 } });
+    var msg = Message.init("/param/x", "ifsb", &[_]Value{ .{ .i = 777 }, .{ .f = 3.14 }, .{ .s = "hi" }, .{ .b = &[_]u8{ 0x12, 0x00, 0x23 } } });
     var num_bytes = try msg.encode(&buf);
     const data = buf[0..num_bytes]; // packed OSC data, suitable for transmission
+
     // Decode message
     var address: []const u8 = undefined;
     var typetag: []const u8 = undefined;
-    var values: [3]Value = undefined;
-    num_bytes = try Message.decode(data, &address, &typetag, &values);
-    std.debug.print("address = {s} typetag = {s} values = [{}, {}, {}]\n", .{ address, typetag, values[0].f, values[1].f, values[2].f });
+    var values: [8]Value = undefined;
+    var num_decoded_values: usize = 0;
+    num_bytes = try Message.decode(data, &address, &typetag, &values, &num_decoded_values);
+
+    std.debug.print("address = {s} typetag = {s}\n", .{ address, typetag });
+    for (num_decoded_values, 0..) |_, i| {
+        std.debug.print("value[{}] = {}\n", .{ i, values[i] });
+    }
 }
 ```
 
