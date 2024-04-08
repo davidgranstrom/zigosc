@@ -1,6 +1,6 @@
 # zigosc
 
-`zigosc` is a (OSC)[https://opensoundcontrol.stanford.edu/spec-1_0.html] serialization library with no dynamic memory allocation.
+`zigosc` is a [OSC 1.0](https://opensoundcontrol.stanford.edu/spec-1_0.html) serialization library with no dynamic memory allocation.
 
 ## Build
 
