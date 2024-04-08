@@ -56,7 +56,7 @@ pub const Message = struct {
     }
 
     /// Decode the message to zig types
-    pub fn decode(buf: []const u8, address: ?*[]const u8, typetag: ?*[]const u8, values: ?[]Value) Error!usize {
+    pub fn decode(buf: []const u8, address: ?*[]const u8, typetag: ?*[]const u8, values: ?[]Value, num_decoded_values: ?*usize) Error!usize {
         var tmp: Value = undefined;
         var offset = try Value.decode(Type.s, buf[0..], &tmp);
         if (address) |addr| {
@@ -68,20 +68,25 @@ pub const Message = struct {
         if (typetag) |tag| {
             tag.* = tmp.s[1..];
         }
-        for (tmp.s[1..], 0..) |c, i| {
+        var num_decoded: usize = 0;
+        for (tmp.s[1..]) |c| {
             if (c == 'T' or c == 'F' or c == 'N' or c == 'I') continue;
             const tag_name = [_]u8{c};
             var tmp_val: Value = undefined;
             if (std.meta.stringToEnum(Type, &tag_name)) |T| {
                 offset += try Value.decode(T, buf[offset..], &tmp_val);
                 if (values) |vals| {
-                    if (i >= vals.len)
+                    if (num_decoded >= vals.len)
                         return MessageError.NotEnoughValues;
-                    vals[i] = tmp_val;
+                    vals[num_decoded] = tmp_val;
+                    num_decoded += 1;
                 }
             } else {
                 return MessageError.InvalidType;
             }
+        }
+        if (num_decoded_values) |num| {
+            num.* = num_decoded;
         }
         return offset;
     }
@@ -102,10 +107,12 @@ test "message encode/decode" {
     var typetag: []const u8 = undefined;
     var out_values: [2]Value = undefined;
 
-    const num_decoded_bytes = try Message.decode(&buf, &address, &typetag, out_values[0..]);
+    var num_decoded_values: usize = 0;
+    const num_decoded_bytes = try Message.decode(&buf, &address, &typetag, out_values[0..], &num_decoded_values);
     try testing.expectEqual(num_encoded_bytes, num_decoded_bytes);
     try testing.expectEqualSlices(u8, "/foo/bar", address);
     try testing.expectEqualSlices(u8, "ifT", typetag);
+    try testing.expectEqual(@as(usize, 2), num_decoded_values);
     try testing.expectEqual(@as(i32, 1234), out_values[0].i);
     try testing.expectEqual(@as(f32, 1.234), out_values[1].f);
 }
