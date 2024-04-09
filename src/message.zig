@@ -115,7 +115,7 @@ test "message encode/decode" {
     const testing = std.testing;
 
     const values = [_]Value{ .{ .i = 1234 }, .{ .f = 1.234 } };
-    var msg = Message.init("/foo/bar", "ifT", &values); // 12 + 8 + 4 + 4
+    var msg = Message.init("/foo/bar", "ifT", &values);
     var buf: [64]u8 = undefined;
     var num_encoded_bytes = try msg.encode(&buf);
 
@@ -138,4 +138,16 @@ test "message encode/decode" {
     msg = Message.init("/ab", "", null);
     num_encoded_bytes = try msg.encode(&buf);
     try testing.expectEqual(@as(usize, 8), num_encoded_bytes);
+
+    msg = Message.init("/ab", ",", null);
+    num_encoded_bytes = try msg.encode(&buf);
+    try testing.expectEqual(@as(usize, 8), num_encoded_bytes);
+
+    msg = Message.init("/ab", "ifsbTFN", null);
+    num_encoded_bytes = try msg.encode(&buf);
+    try testing.expectEqual(@as(usize, 16), num_encoded_bytes);
+
+    msg = Message.init("/ab", ",ifsbTFN", null);
+    num_encoded_bytes = try msg.encode(&buf);
+    try testing.expectEqual(@as(usize, 16), num_encoded_bytes);
 }
