@@ -39,21 +39,33 @@ pub const Message = struct {
         return size;
     }
 
-    /// Encode the message to OSC bytes
-    pub fn encode(self: *const Message, buf: []u8) Error!usize {
-        const address = Value{ .s = self.address };
-        var offset = try address.encode(buf[0..]);
+    fn encodeTypetag(self: *Message, buf: []u8) !usize {
+        var offset: usize = 0;
         const typetag = Value{ .s = self.typetag };
         if (typetag.s.len == 0) {
             @memcpy(buf[offset .. offset + 4], &[_]u8{ ',', 0, 0, 0 });
             offset += 4;
         } else if (typetag.s[0] != ',') {
             buf[offset] = ',';
-            _ = try typetag.encode(buf[1 + offset ..]);
-            offset += alignedStringLength(1 + typetag.s.len);
+            offset += 1;
+            @memcpy(buf[offset .. offset + typetag.s.len], typetag.s);
+            offset += typetag.s.len;
+            const aligned_len = alignedStringLength(1 + typetag.s.len);
+            const padding = aligned_len - (1 + typetag.s.len);
+            @memset(buf[offset .. offset + padding], 0);
+            offset += padding;
         } else {
             offset += try typetag.encode(buf[offset..]);
         }
+        return offset;
+    }
+
+    /// Encode the message to OSC bytes
+    pub fn encode(self: *Message, buf: []u8) Error!usize {
+        var offset: usize = 0;
+        const address = Value{ .s = self.address };
+        offset += try address.encode(buf[0..]);
+        offset += try self.encodeTypetag(buf[offset..]);
         if (self.values) |values| {
             for (values) |value| {
                 offset += try value.encode(buf[offset..]);
