@@ -39,23 +39,29 @@ pub const Message = struct {
         return size;
     }
 
-    /// Encode the message to OSC bytes
-    pub fn encode(self: *const Message, writer: anytype) !usize {
-        const address = Value{ .s = self.address };
+    fn encodeTypetag(self: *Message, writer: anytype) !usize {
+        var offset: usize = 0;
         const typetag = Value{ .s = self.typetag };
-        var offset = try address.encode(writer);
         if (typetag.s.len == 0) {
             offset += try writer.write(&[_]u8{ ',', 0, 0, 0 });
         } else if (typetag.s[0] != ',') {
-            _ = try writer.writeByte(',');
-            var tmp_offset: usize = 1;
-            tmp_offset += try typetag.encode(writer);
-            const padding = alignedStringLength(1 + typetag.s.len) - tmp_offset;
+            try writer.print(",{s}", .{typetag.s});
+            const aligned_len = alignedStringLength(1 + typetag.s.len);
+            const padding = aligned_len - (1 + typetag.s.len);
             try writer.writeByteNTimes(0, padding);
-            offset += tmp_offset + padding;
+            offset += aligned_len;
         } else {
             offset += try typetag.encode(writer);
         }
+        return offset;
+    }
+
+    /// Encode the message to OSC bytes
+    pub fn encode(self: *Message, writer: anytype) !usize {
+        var offset: usize = 0;
+        const address = Value{ .s = self.address };
+        offset += try address.encode(writer);
+        offset += try self.encodeTypetag(writer);
         if (self.values) |values| {
             for (values) |value| {
                 offset += try value.encode(writer);
