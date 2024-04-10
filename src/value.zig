@@ -89,7 +89,7 @@ pub const Value = union(Type) {
         return ValueError.NullTerminator;
     }
 
-    pub fn decode(T: Type, buf: []const u8, value: *Value) !usize {
+    pub fn decode(T: Type, buf: []const u8, value: *Value) ValueError!usize {
         switch (T) {
             inline else => |t| {
                 switch (t) {
