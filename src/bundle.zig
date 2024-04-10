@@ -17,6 +17,63 @@ pub fn isBundle(buf: []const u8) bool {
     return std.mem.eql(u8, "#bundle\x00", buf[0..8]);
 }
 
+pub const Timetag = struct {
+    value: union(enum) {
+        unix: i64,
+        ntp: u64,
+    },
+
+    fn unixToNTP(microseconds: i64) u64 {
+        var seconds: f64 = @floatFromInt(microseconds);
+        seconds /= std.time.us_per_s;
+        seconds += @abs(std.time.epoch.ntp);
+        var fractions: f64 = seconds - @trunc(seconds);
+        fractions *= std.math.maxInt(u32);
+        const high: u64 = @intFromFloat(seconds);
+        const low: u64 = @intFromFloat(fractions);
+        return (high << 32) | low;
+    }
+
+    fn ntpToUnix(timetag: u64) i64 {
+        var seconds: f64 = @floatFromInt(timetag >> 32);
+        seconds -= @abs(std.time.epoch.ntp);
+        seconds *= std.time.us_per_s;
+        var fractions: f64 = @floatFromInt(timetag & 0xffffffff);
+        fractions /= std.math.maxInt(u32);
+        fractions *= std.time.us_per_s;
+        fractions = @round(fractions);
+        const high: i64 = @intFromFloat(seconds);
+        const low: i64 = @intFromFloat(fractions);
+        return @intCast(high + low);
+    }
+
+    pub fn initUnix(microseconds: i64) Timetag {
+        return .{
+            .value = .{ .unix = microseconds },
+        };
+    }
+
+    pub fn initNtp(timetag: u64) Timetag {
+        return .{
+            .value = .{ .ntp = timetag },
+        };
+    }
+
+    pub fn ntp(self: Timetag) u64 {
+        switch (self.value) {
+            .unix => |v| return unixToNTP(v),
+            .ntp => |v| return v,
+        }
+    }
+
+    pub fn unix(self: Timetag) i64 {
+        switch (self.value) {
+            .unix => |v| return v,
+            .ntp => |v| return ntpToUnix(v),
+        }
+    }
+};
+
 /// Utility structure to encode bundle elements
 pub const BundleElement = struct {
     content: union(enum) {
@@ -132,4 +189,13 @@ test "bundle encode/decode" {
     offset += try Message.decode(buf[offset..], null, null, null, null);
     try testing.expectEqual(@as(usize, 68), offset);
     try testing.expectEqual(bundle2.getSize(), offset);
+
+    const us_timestamp: i64 = 1712787209030896;
+    const ntp_timestamp: u64 = 16843899701025099775;
+    var tt = Timetag.initUnix(us_timestamp);
+    try testing.expectEqual(us_timestamp, tt.unix());
+    try testing.expectEqual(ntp_timestamp, tt.ntp());
+    tt = Timetag.initNtp(ntp_timestamp);
+    try testing.expectEqual(us_timestamp, tt.unix());
+    try testing.expectEqual(ntp_timestamp, tt.ntp());
 }
