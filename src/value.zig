@@ -89,35 +89,50 @@ pub const Value = union(Type) {
         return ValueError.NullTerminator;
     }
 
+    fn decodeScalar(comptime T: type, buf: []const u8, value: *Value, comptime field_name: []const u8) ValueError!usize {
+        const size = @sizeOf(T);
+        const DataLen = if (size == 4) u32 else u64;
+        value.* = @unionInit(Value, field_name, @bitCast(std.mem.readInt(DataLen, buf[0..size], .big)));
+        return size;
+    }
+
     pub fn decode(T: Type, buf: []const u8, value: *Value) ValueError!usize {
-        switch (T) {
-            inline else => |t| {
-                switch (t) {
-                    .s => return decodeString(buf, value, "s"),
-                    .S => return decodeString(buf, value, "S"),
-                    .b => {
-                        var tmp: Value = undefined;
-                        const offset = try Value.decode(Type.i, buf, &tmp);
-                        const len: usize = @intCast(tmp.i);
-                        const size = offset + len;
-                        value.* = Value{ .b = buf[offset..size] };
-                        return offset + alignedBlobLength(len);
-                    },
-                    .T, .F, .N, .I => {
-                        value.* = @unionInit(Value, @tagName(t), {});
-                        return 0;
-                    },
-                    .i, .f, .c, .r, .m => {
-                        value.* = @unionInit(Value, @tagName(t), @bitCast(std.mem.readInt(u32, buf[0..4], .big)));
-                        return 4;
-                    },
-                    .h, .t, .d => {
-                        value.* = @unionInit(Value, @tagName(t), @bitCast(std.mem.readInt(u64, buf[0..8], .big)));
-                        return 8;
-                    },
-                }
+        return switch (T) {
+            .s => decodeString(buf, value, "s"),
+            .S => decodeString(buf, value, "S"),
+            .i => decodeScalar(i32, buf, value, "i"),
+            .f => decodeScalar(f32, buf, value, "f"),
+            .c => decodeScalar(i32, buf, value, "c"),
+            .r => decodeScalar(i32, buf, value, "r"),
+            .m => decodeScalar(i32, buf, value, "m"),
+            .h => decodeScalar(i64, buf, value, "h"),
+            .t => decodeScalar(u64, buf, value, "t"),
+            .d => decodeScalar(f64, buf, value, "d"),
+            .b => {
+                var tmp: Value = undefined;
+                const offset = try Value.decode(Type.i, buf, &tmp);
+                const len: usize = @intCast(tmp.i);
+                const size = offset + len;
+                value.* = Value{ .b = buf[offset..size] };
+                return offset + alignedBlobLength(len);
             },
-        }
+            .T => {
+                value.* = Value{ .T = {} };
+                return 0;
+            },
+            .F => {
+                value.* = Value{ .F = {} };
+                return 0;
+            },
+            .N => {
+                value.* = Value{ .N = {} };
+                return 0;
+            },
+            .I => {
+                value.* = Value{ .I = {} };
+                return 0;
+            },
+        };
     }
 
     pub fn getSize(self: Value) usize {
