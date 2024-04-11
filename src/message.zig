@@ -123,16 +123,17 @@ test "message encode/decode" {
 
     var address: []const u8 = undefined;
     var typetag: []const u8 = undefined;
-    var out_values: [2]Value = undefined;
+    var out_values: [3]Value = undefined;
 
     var num_decoded_values: usize = 0;
     const num_decoded_bytes = try Message.decode(&buf, &address, &typetag, out_values[0..], &num_decoded_values);
     try testing.expectEqual(num_encoded_bytes, num_decoded_bytes);
     try testing.expectEqualSlices(u8, "/foo/bar", address);
     try testing.expectEqualSlices(u8, "ifT", typetag);
-    try testing.expectEqual(@as(usize, 2), num_decoded_values);
+    try testing.expectEqual(@as(usize, 3), num_decoded_values);
     try testing.expectEqual(@as(i32, 1234), out_values[0].i);
     try testing.expectEqual(@as(f32, 1.234), out_values[1].f);
+    try testing.expect(out_values[2].TF);
 
     msg = Message.init("/ab", "", null);
     num_encoded_bytes = try msg.encode(&buf);

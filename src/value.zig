@@ -142,7 +142,7 @@ pub const Value = union(enum) {
             .b => |v| alignedBlobLength(v.len),
             .i, .f, .c, .r, .m => 4,
             .h, .t, .d => 8,
-            .T, .F, .N, .I => 0,
+            .TF, .N, .I => 0,
         };
     }
 };
