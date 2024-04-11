@@ -18,11 +18,19 @@
 
 ## Build
 
+See `zig build -h` for build options.
+
 ```
 zig build
 ```
 
-## Usage
+## Testing
+
+```
+zig build test --summary all
+```
+
+## Example usage
 
 ```zig
 const std = @import("std");
