@@ -39,13 +39,13 @@ pub const Value = union(Type) {
     /// 4 byte MIDI message. Bytes from MSB to LSB are: port id, status byte, data1, data2
     m: u32,
     /// True. No bytes are allocated in the argument data.
-    T: void,
+    T: bool,
     /// False. No bytes are allocated in the argument data.
-    F: void,
+    F: bool,
     /// Nil. No bytes are allocated in the argument data.
     N: void,
     /// Infinitum. No bytes are allocated in the argument data.
-    I: void,
+    I: f32,
 
     pub fn encode(self: Value, buf: []u8) ValueError!usize {
         switch (self) {
@@ -117,11 +117,11 @@ pub const Value = union(Type) {
                 return offset + alignedBlobLength(len);
             },
             .T => {
-                value.* = Value{ .T = {} };
+                value.* = Value{ .T = true };
                 return 0;
             },
             .F => {
-                value.* = Value{ .F = {} };
+                value.* = Value{ .F = false };
                 return 0;
             },
             .N => {
@@ -129,7 +129,7 @@ pub const Value = union(Type) {
                 return 0;
             },
             .I => {
-                value.* = Value{ .I = {} };
+                value.* = Value{ .I = std.math.inf(f32) };
                 return 0;
             },
         };
