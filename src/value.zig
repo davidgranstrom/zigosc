@@ -17,7 +17,7 @@ pub fn alignedBlobLength(n: usize) usize {
 pub const Type = enum { i, f, s, b, h, t, d, S, c, r, m, T, F, N, I };
 
 /// An OSC value
-pub const Value = union(Type) {
+pub const Value = union(enum) {
     /// Atomic types
     i: i32,
     f: f32,
@@ -39,9 +39,9 @@ pub const Value = union(Type) {
     /// 4 byte MIDI message. Bytes from MSB to LSB are: port id, status byte, data1, data2
     m: u32,
     /// True. No bytes are allocated in the argument data.
-    T: bool,
+    TF: bool,
     /// False. No bytes are allocated in the argument data.
-    F: bool,
+    // F: bool,
     /// Nil. No bytes are allocated in the argument data.
     N: void,
     /// Infinitum. No bytes are allocated in the argument data.
@@ -67,7 +67,7 @@ pub const Value = union(Type) {
                 @memset(buf[start..end], 0);
                 return offset + len;
             },
-            .T, .F, .N, .I => return 0,
+            .TF, .N, .I => return 0,
             // Scalar values
             inline else => |v| {
                 const T = @TypeOf(v);
@@ -117,11 +117,11 @@ pub const Value = union(Type) {
                 return offset + alignedBlobLength(len);
             },
             .T => {
-                value.* = Value{ .T = true };
+                value.* = Value{ .TF = true };
                 return 0;
             },
             .F => {
-                value.* = Value{ .F = false };
+                value.* = Value{ .TF = false };
                 return 0;
             },
             .N => {

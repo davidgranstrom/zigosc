@@ -89,7 +89,6 @@ pub const Message = struct {
         }
         var num_decoded: usize = 0;
         for (tmp.s[1..]) |c| {
-            if (c == 'T' or c == 'F' or c == 'N' or c == 'I') continue;
             const tag_name = [_]u8{c};
             var tmp_val: Value = undefined;
             if (std.meta.stringToEnum(Type, &tag_name)) |T| {
