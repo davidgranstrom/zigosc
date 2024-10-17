@@ -10,12 +10,6 @@
 - [x] Message
 - [x] Bundle
 
-**Server**
-
-- [ ] Methods
-- [ ] Dispatch
-- [ ] Pattern matching
-
 ## Build
 
 See `zig build -h` for build options.
