@@ -2,10 +2,7 @@
     .name = .zigosc,
     .fingerprint = 0xba8ac348895bb149,
     .version = "0.1.0",
-
-    .dependencies = .{
-    },
-
+    .dependencies = .{},
     .paths = .{
         "build.zig",
         "build.zig.zon",
